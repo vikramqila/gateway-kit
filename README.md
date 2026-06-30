@@ -35,7 +35,7 @@ go test ./...
 - [x] Support API key authentication
 - [x] Support fixed-window rate limiting
 - [x] Support retries for transient upstream failures
-- [ ] Support multiple upstream targets
+- [x] Support multiple upstream targets
 
 Current CLI output after a successful startup:
 
@@ -59,6 +59,9 @@ not enforced yet.
 Single-upstream routes with `retry` retry configured upstream status codes using fixed or
 exponential backoff. Request bodies are buffered so retried requests preserve the original
 payload.
+
+Routes using `upstream.targets` are forwarded with `round_robin` or `weighted_round_robin`
+selection. Target selection is kept in memory per route.
 
 ## Project Layout
 

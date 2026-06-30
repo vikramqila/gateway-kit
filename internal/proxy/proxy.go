@@ -11,6 +11,7 @@ import (
 	"net/http"
 	"net/url"
 	"strings"
+	"sync"
 	"time"
 
 	"gatewaykit/internal/config"
@@ -21,22 +22,28 @@ var ErrUpstreamTimeout = errors.New("upstream timeout")
 
 type Forwarder struct {
 	client *http.Client
+	mu     sync.Mutex
+	next   map[string]int
 }
 
 func NewForwarder(client *http.Client) *Forwarder {
 	if client == nil {
 		client = http.DefaultClient
 	}
-	return &Forwarder{client: client}
+	return &Forwarder{
+		client: client,
+		next:   map[string]int{},
+	}
 }
 
 func (f *Forwarder) ServeHTTP(w http.ResponseWriter, r *http.Request, route config.Route, timeout time.Duration) error {
-	if route.Upstream.URL == "" {
+	upstreamURL, err := f.selectUpstream(route)
+	if err != nil {
 		return ErrUnsupportedUpstream
 	}
 
 	requestPath := forwardedPath(route, r.URL.Path)
-	targetURL, err := buildTargetURL(route.Upstream.URL, r.URL, requestPath)
+	targetURL, err := buildTargetURL(upstreamURL, r.URL, requestPath)
 	if err != nil {
 		return fmt.Errorf("build upstream request: %w", err)
 	}
@@ -68,6 +75,50 @@ func (f *Forwarder) ServeHTTP(w http.ResponseWriter, r *http.Request, route conf
 	}
 
 	return nil
+}
+
+func (f *Forwarder) selectUpstream(route config.Route) (string, error) {
+	if route.Upstream.URL != "" {
+		return route.Upstream.URL, nil
+	}
+	if len(route.Upstream.Targets) == 0 {
+		return "", ErrUnsupportedUpstream
+	}
+
+	f.mu.Lock()
+	defer f.mu.Unlock()
+
+	key := route.Path
+	index := f.next[key]
+	selected := selectTarget(route.Upstream, index)
+	f.next[key] = index + 1
+	return selected, nil
+}
+
+func selectTarget(upstream config.Upstream, index int) string {
+	if upstream.Balance == "weighted_round_robin" {
+		return selectWeightedTarget(upstream.Targets, index)
+	}
+	return upstream.Targets[index%len(upstream.Targets)].URL
+}
+
+func selectWeightedTarget(targets []config.Target, index int) string {
+	totalWeight := 0
+	for _, target := range targets {
+		totalWeight += target.Weight
+	}
+	if totalWeight <= 0 {
+		return targets[index%len(targets)].URL
+	}
+
+	slot := index % totalWeight
+	for _, target := range targets {
+		slot -= target.Weight
+		if slot < 0 {
+			return target.URL
+		}
+	}
+	return targets[len(targets)-1].URL
 }
 
 func (f *Forwarder) doWithRetries(ctx context.Context, r *http.Request, targetURL string, body []byte, route config.Route) (*http.Response, error) {

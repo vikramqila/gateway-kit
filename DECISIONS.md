@@ -51,10 +51,10 @@ without rewriting the core proxy path.
 - API key authentication implemented for routes with `auth.type: api_key`.
 - Fixed-window rate limiting implemented with in-memory per-route buckets.
 - Retry support implemented for configured single-upstream response statuses.
-- Multi-target upstream routes return `501 Not Implemented` until load balancing is built.
+- Multi-target upstream routes support round-robin and weighted round-robin selection.
 
 ## Next Steps
 
-1. Add multiple upstream selection.
-2. Circle back to sliding-window rate limiting if time allows.
+1. Circle back to sliding-window rate limiting if time allows.
+2. Add health checks for target upstreams.
 3. Add manual mock upstream instructions or a small mock upstream binary.

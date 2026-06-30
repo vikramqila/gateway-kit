@@ -62,11 +62,85 @@ func TestForwarderProxiesRequestAndResponse(t *testing.T) {
 func TestForwarderRejectsUnsupportedUpstream(t *testing.T) {
 	req := httptest.NewRequest(http.MethodGet, "/api/products", nil)
 	rec := httptest.NewRecorder()
-	route := config.Route{Upstream: config.Upstream{Targets: []config.Target{{URL: "http://example.com", Weight: 1}}}}
+	route := config.Route{}
 
 	err := NewForwarder(nil).ServeHTTP(rec, req, route, 0)
 	if !errors.Is(err, ErrUnsupportedUpstream) {
 		t.Fatalf("ServeHTTP() error = %v, want ErrUnsupportedUpstream", err)
+	}
+}
+
+func TestForwarderUsesRoundRobinTargets(t *testing.T) {
+	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("first"))
+	}))
+	defer first.Close()
+
+	second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("second"))
+	}))
+	defer second.Close()
+
+	forwarder := NewForwarder(first.Client())
+	route := config.Route{
+		Path: "/api/products",
+		Upstream: config.Upstream{
+			Balance: "round_robin",
+			Targets: []config.Target{
+				{URL: first.URL, Weight: 1},
+				{URL: second.URL, Weight: 1},
+			},
+		},
+	}
+
+	want := []string{"first", "second", "first"}
+	for i, expected := range want {
+		req := httptest.NewRequest(http.MethodGet, "/api/products", nil)
+		rec := httptest.NewRecorder()
+
+		if err := forwarder.ServeHTTP(rec, req, route, 0); err != nil {
+			t.Fatalf("request %d ServeHTTP() error = %v", i+1, err)
+		}
+		if got := rec.Body.String(); got != expected {
+			t.Fatalf("request %d body = %q, want %q", i+1, got, expected)
+		}
+	}
+}
+
+func TestForwarderUsesWeightedRoundRobinTargets(t *testing.T) {
+	heavy := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("heavy"))
+	}))
+	defer heavy.Close()
+
+	light := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("light"))
+	}))
+	defer light.Close()
+
+	forwarder := NewForwarder(heavy.Client())
+	route := config.Route{
+		Path: "/api/products",
+		Upstream: config.Upstream{
+			Balance: "weighted_round_robin",
+			Targets: []config.Target{
+				{URL: heavy.URL, Weight: 2},
+				{URL: light.URL, Weight: 1},
+			},
+		},
+	}
+
+	want := []string{"heavy", "heavy", "light", "heavy"}
+	for i, expected := range want {
+		req := httptest.NewRequest(http.MethodGet, "/api/products", nil)
+		rec := httptest.NewRecorder()
+
+		if err := forwarder.ServeHTTP(rec, req, route, 0); err != nil {
+			t.Fatalf("request %d ServeHTTP() error = %v", i+1, err)
+		}
+		if got := rec.Body.String(); got != expected {
+			t.Fatalf("request %d body = %q, want %q", i+1, got, expected)
+		}
 	}
 }
 

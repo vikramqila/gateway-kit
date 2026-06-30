@@ -120,6 +120,48 @@ func TestMatchedAllowedRouteProxiesSingleUpstream(t *testing.T) {
 	}
 }
 
+func TestMatchedAllowedRouteProxiesTargetUpstreams(t *testing.T) {
+	first := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("first"))
+	}))
+	defer first.Close()
+
+	second := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = w.Write([]byte("second"))
+	}))
+	defer second.Close()
+
+	handler := NewHandler(config.Gateway{
+		Routes: []config.Route{
+			{
+				Path:    "/api/products",
+				Methods: []string{http.MethodGet},
+				Upstream: config.Upstream{
+					Balance: "round_robin",
+					Targets: []config.Target{
+						{URL: first.URL, Weight: 1},
+						{URL: second.URL, Weight: 1},
+					},
+				},
+			},
+		},
+	})
+
+	for i, expected := range []string{"first", "second"} {
+		req := httptest.NewRequest(http.MethodGet, "/api/products", nil)
+		rec := httptest.NewRecorder()
+
+		handler.ServeHTTP(rec, req)
+
+		if rec.Code != http.StatusOK {
+			t.Fatalf("request %d status = %d, want %d", i+1, rec.Code, http.StatusOK)
+		}
+		if got := rec.Body.String(); got != expected {
+			t.Fatalf("request %d body = %q, want %q", i+1, got, expected)
+		}
+	}
+}
+
 func TestGlobalTimeoutReturnsGatewayTimeout(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		time.Sleep(50 * time.Millisecond)
