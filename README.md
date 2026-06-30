@@ -48,6 +48,9 @@ Run with verbose output:
 go test ./... -v
 ```
 
+End-to-end coverage lives in `internal/e2e` and starts a real gateway plus in-process
+mock upstreams before making HTTP calls through the gateway.
+
 Confirm all packages compile:
 
 ```bash

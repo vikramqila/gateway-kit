@@ -31,17 +31,59 @@ deserves careful behavior design and would have expanded the surface area substa
 
 The gateway is structured as a small request pipeline:
 
-```text
-HTTP request
-  -> health check short-circuit
-  -> route matcher
-  -> method guard
-  -> API key auth
-  -> rate limit middleware
-  -> upstream timeout selection
-  -> upstream target selection
-  -> retrying proxy transport
-  -> response writer
+```mermaid
+flowchart TD
+    A["HTTP request"] --> B{"GET /health?"}
+    B -- "yes" --> C["Return 200 healthy"]
+    B -- "no" --> D{"Route match?"}
+    D -- "no" --> E["Return 404 not_found"]
+    D -- "yes" --> F{"Method allowed?"}
+    F -- "no" --> G["Return 405 with Allow header"]
+    F -- "yes" --> H{"API key required?"}
+    H -- "missing or invalid" --> I["Return 401 unauthorized"]
+    H -- "valid or not required" --> J{"Within rate limit?"}
+    J -- "no" --> K["Return 429 rate_limited"]
+    J -- "yes" --> L["Select route/global timeout"]
+    L --> M["Select upstream URL or target"]
+    M --> N["Forward with retry policy"]
+    N -- "timeout" --> O["Return 504 gateway_timeout"]
+    N -- "transport error" --> P["Return 502 bad_gateway"]
+    N -- "upstream response" --> Q["Copy status, headers, and body"]
+```
+
+The runtime request flow looks like this:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client
+    participant Gateway as Gateway Handler
+    participant Limiter as Rate Limiter
+    participant Proxy as Proxy Forwarder
+    participant Upstream
+
+    Client->>Gateway: HTTP request
+    alt Health request
+        Gateway-->>Client: 200 healthy
+    else Routed request
+        Gateway->>Gateway: Match route and validate method
+        Gateway->>Gateway: Check API key auth
+        Gateway->>Limiter: Evaluate route/global limit
+        Limiter-->>Gateway: allow or reject
+        alt Rate limited
+            Gateway-->>Client: 429 rate_limited
+        else Allowed
+            Gateway->>Gateway: Choose timeout
+            Gateway->>Proxy: Forward request with route config
+            Proxy->>Proxy: Select upstream target
+            loop Retry attempts
+                Proxy->>Upstream: HTTP request
+                Upstream-->>Proxy: Response or error
+            end
+            Proxy-->>Gateway: Upstream response or proxy error
+            Gateway-->>Client: Final gateway response
+        end
+    end
 ```
 
 The code is split along that pipeline:
@@ -104,7 +146,8 @@ mostly affect `internal/proxy`.
 2. Circuit breaker state with failure windows and cooldown responses.
 3. Request and response transformations for JSON payloads and headers.
 4. Request-size limits around retry buffering.
-5. More manual demo scripts that start all mock upstreams and the gateway together.
+5. Containerize the gateway with a small runtime image, documented config mounting, and a
+   compose-based local demo that runs the gateway alongside mock upstreams.
 
 ## AI Tooling
 
