@@ -44,6 +44,10 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusMethodNotAllowed, map[string]string{"error": "method_not_allowed"})
 		return
 	}
+	if !authorized(route, r) {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "unauthorized"})
+		return
+	}
 
 	if err := h.proxy.ServeHTTP(w, r, route, h.timeoutFor(route)); err != nil {
 		if errors.Is(err, proxy.ErrUnsupportedUpstream) {
@@ -85,6 +89,26 @@ func routeMatches(routePath string, requestPath string) bool {
 func methodAllowed(route config.Route, method string) bool {
 	for _, allowed := range route.Methods {
 		if allowed == method {
+			return true
+		}
+	}
+	return false
+}
+
+func authorized(route config.Route, r *http.Request) bool {
+	if route.Auth == nil {
+		return true
+	}
+	if route.Auth.Type != "api_key" {
+		return false
+	}
+
+	value := r.Header.Get(route.Auth.Header)
+	if value == "" {
+		return false
+	}
+	for _, key := range route.Auth.Keys {
+		if value == key {
 			return true
 		}
 	}

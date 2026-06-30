@@ -179,6 +179,49 @@ func TestRouteTimeoutOverridesGlobalTimeout(t *testing.T) {
 	}
 }
 
+func TestAPIKeyAuthRejectsMissingKey(t *testing.T) {
+	handler := NewHandler(authGateway("http://example.com"))
+	req := httptest.NewRequest(http.MethodGet, "/api/internal", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAPIKeyAuthRejectsInvalidKey(t *testing.T) {
+	handler := NewHandler(authGateway("http://example.com"))
+	req := httptest.NewRequest(http.MethodGet, "/api/internal", nil)
+	req.Header.Set("X-API-Key", "wrong-key")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusUnauthorized {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAPIKeyAuthAllowsValidKey(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+
+	handler := NewHandler(authGateway(upstream.URL))
+	req := httptest.NewRequest(http.MethodGet, "/api/internal", nil)
+	req.Header.Set("X-API-Key", "sk_live_abc123")
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
 func TestRouteMatchUsesPathBoundary(t *testing.T) {
 	handler := NewHandler(testGateway())
 	req := httptest.NewRequest(http.MethodGet, "/api/users2", nil)
@@ -188,6 +231,25 @@ func TestRouteMatchUsesPathBoundary(t *testing.T) {
 
 	if rec.Code != http.StatusNotFound {
 		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNotFound)
+	}
+}
+
+func authGateway(upstreamURL string) config.Gateway {
+	return config.Gateway{
+		Routes: []config.Route{
+			{
+				Path:    "/api/internal",
+				Methods: []string{http.MethodGet},
+				Upstream: config.Upstream{
+					URL: upstreamURL,
+				},
+				Auth: &config.Auth{
+					Type:   "api_key",
+					Header: "X-API-Key",
+					Keys:   []string{"sk_live_abc123", "sk_live_def456"},
+				},
+			},
+		},
 	}
 }
 

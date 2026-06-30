@@ -32,7 +32,7 @@ go test ./...
 - [x] Proxy requests to single upstream routes
 - [x] Support prefix stripping
 - [x] Support global and route-level timeouts
-- [ ] Support API key authentication
+- [x] Support API key authentication
 - [ ] Support fixed-window rate limiting
 - [ ] Support retries for transient upstream failures
 - [ ] Support multiple upstream targets
@@ -48,6 +48,9 @@ Single `upstream.url` routes now proxy to their upstream service. Routes using
 configured upstream service is not running, the gateway returns `502 Bad Gateway`. Upstream
 requests honor route-level `timeout` first, then `global_timeout`, and return `504 Gateway
 Timeout` when exceeded.
+
+Routes configured with `auth.type: api_key` require the configured header to contain one of
+the configured keys before proxying.
 
 ## Project Layout
 

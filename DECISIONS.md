@@ -48,10 +48,11 @@ without rewriting the core proxy path.
 - HTTP server startup, `GET /health`, route matching, `404`, and `405` behavior implemented.
 - Single `upstream.url` routes proxy requests and return upstream responses.
 - Prefix stripping and upstream request timeouts implemented.
+- API key authentication implemented for routes with `auth.type: api_key`.
 - Multi-target upstream routes return `501 Not Implemented` until load balancing is built.
 
 ## Next Steps
 
-1. Add API key authentication.
-2. Add fixed-window rate limiting.
+1. Add fixed-window rate limiting.
+2. Add retries for transient upstream failures.
 3. Add manual mock upstream instructions or a small mock upstream binary.
