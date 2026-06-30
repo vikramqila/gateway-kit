@@ -3,9 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 
 	"gatewaykit/internal/config"
+	"gatewaykit/internal/gateway"
 )
 
 func main() {
@@ -27,5 +29,10 @@ func main() {
 		os.Exit(1)
 	}
 
-	fmt.Fprintf(os.Stdout, "GatewayKit config loaded: port=%d routes=%d\n", cfg.Gateway.Port, len(cfg.Gateway.Routes))
+	addr := fmt.Sprintf(":%d", cfg.Gateway.Port)
+	fmt.Fprintf(os.Stdout, "GatewayKit listening on %s with %d routes\n", addr, len(cfg.Gateway.Routes))
+	if err := http.ListenAndServe(addr, gateway.NewHandler(cfg.Gateway)); err != nil {
+		fmt.Fprintf(os.Stderr, "serve gateway: %v\n", err)
+		os.Exit(1)
+	}
 }

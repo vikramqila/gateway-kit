@@ -45,10 +45,11 @@ without rewriting the core proxy path.
 
 - Project scaffold created.
 - YAML configuration loading and validation implemented.
-- Gateway behavior is not implemented yet.
+- HTTP server startup, `GET /health`, route matching, `404`, and `405` behavior implemented.
+- Matched routes return `501 Not Implemented` until the proxy stage is built.
 
 ## Next Steps
 
-1. Add the HTTP server and unconditional `GET /health`.
-2. Add route matching and method filtering.
-3. Add tests for health, `404`, and `405` responses.
+1. Add single-upstream proxying.
+2. Forward request method, path, query string, headers, and body.
+3. Return upstream status, headers, and body to the client.

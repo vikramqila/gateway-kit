@@ -12,7 +12,7 @@ Prerequisite:
 
 - Go 1.22 or newer
 
-Load the gateway config:
+Run the gateway:
 
 ```bash
 go run ./cmd/gatewaykit --config gateway.yaml
@@ -27,8 +27,8 @@ go test ./...
 ## Planned Feature Checklist
 
 - [x] Load gateway configuration from YAML
-- [ ] Expose `GET /health`
-- [ ] Match routes and enforce allowed methods
+- [x] Expose `GET /health`
+- [x] Match routes and enforce allowed methods
 - [ ] Proxy requests to single upstream routes
 - [ ] Support prefix stripping
 - [ ] Support global and route-level timeouts
@@ -37,11 +37,13 @@ go test ./...
 - [ ] Support retries for transient upstream failures
 - [ ] Support multiple upstream targets
 
-Current CLI output after a successful config load:
+Current CLI output after a successful startup:
 
 ```text
-GatewayKit config loaded: port=8080 routes=5
+GatewayKit listening on :8080 with 5 routes
 ```
+
+Implemented route matches currently return `501 Not Implemented` until proxying is added.
 
 ## Project Layout
 
