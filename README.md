@@ -24,6 +24,12 @@ Run tests:
 go test ./...
 ```
 
+Run a mock upstream:
+
+```bash
+go run ./cmd/mockupstream --port 3001 --name users
+```
+
 ## Planned Feature Checklist
 
 - [x] Load gateway configuration from YAML
@@ -44,11 +50,10 @@ Current CLI output after a successful startup:
 GatewayKit listening on :8080 with 5 routes
 ```
 
-Single `upstream.url` routes now proxy to their upstream service. Routes using
-`upstream.targets` still return `501 Not Implemented` until load balancing is added. If a
-configured upstream service is not running, the gateway returns `502 Bad Gateway`. Upstream
-requests honor route-level `timeout` first, then `global_timeout`, and return `504 Gateway
-Timeout` when exceeded.
+Single `upstream.url` routes proxy to their upstream service. If a configured upstream
+service is not running, the gateway returns `502 Bad Gateway`. Upstream requests honor
+route-level `timeout` first, then `global_timeout`, and return `504 Gateway Timeout` when
+exceeded.
 
 Routes configured with `auth.type: api_key` require the configured header to contain one of
 the configured keys before proxying.
@@ -63,9 +68,43 @@ payload.
 Routes using `upstream.targets` are forwarded with `round_robin` or `weighted_round_robin`
 selection. Target selection is kept in memory per route.
 
+## Mock Upstreams
+
+The repository includes a simple mock upstream server for manual testing:
+
+```bash
+go run ./cmd/mockupstream --port 3001 --name users
+```
+
+Useful endpoints:
+
+- `GET /healthz` returns a health response.
+- `GET /echo?x=1` returns method, path, query, and service name.
+- `GET /slow` waits six seconds before responding.
+- `GET /flaky` returns `503` twice, then `200`, repeating every three requests.
+- Any other path returns a canned `200` JSON response.
+
+To exercise the sample `gateway.yaml`, start one mock upstream per configured port:
+
+```bash
+go run ./cmd/mockupstream --port 3001 --name users
+go run ./cmd/mockupstream --port 3002 --name orders
+go run ./cmd/mockupstream --port 3003 --name products-a
+go run ./cmd/mockupstream --port 3004 --name products-b
+go run ./cmd/mockupstream --port 3005 --name legacy
+go run ./cmd/mockupstream --port 3006 --name internal
+```
+
+Then run the gateway in another terminal:
+
+```bash
+go run ./cmd/gatewaykit --config gateway.yaml
+```
+
 ## Project Layout
 
 - `cmd/gatewaykit`: CLI entrypoint for the gateway process
+- `cmd/mockupstream`: simple mock upstream server for manual testing
 - `internal/config`: configuration loading and validation
 - `internal/gateway`: HTTP server, routing, and request pipeline
 - `internal/proxy`: upstream request forwarding

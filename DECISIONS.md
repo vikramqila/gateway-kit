@@ -52,9 +52,10 @@ without rewriting the core proxy path.
 - Fixed-window and sliding-window rate limiting implemented with in-memory per-route buckets.
 - Retry support implemented for configured single-upstream response statuses.
 - Multi-target upstream routes support round-robin and weighted round-robin selection.
+- Mock upstream server added for local manual testing.
 
 ## Next Steps
 
 1. Add health checks for target upstreams.
 2. Add circuit breaker support.
-3. Add manual mock upstream instructions or a small mock upstream binary.
+3. Add request and response transformation support.
