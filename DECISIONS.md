@@ -47,10 +47,11 @@ without rewriting the core proxy path.
 - YAML configuration loading and validation implemented.
 - HTTP server startup, `GET /health`, route matching, `404`, and `405` behavior implemented.
 - Single `upstream.url` routes proxy requests and return upstream responses.
+- Prefix stripping and upstream request timeouts implemented.
 - Multi-target upstream routes return `501 Not Implemented` until load balancing is built.
 
 ## Next Steps
 
-1. Add prefix stripping.
-2. Add global and route-level timeout handling.
+1. Add API key authentication.
+2. Add fixed-window rate limiting.
 3. Add manual mock upstream instructions or a small mock upstream binary.

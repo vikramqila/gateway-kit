@@ -30,8 +30,8 @@ go test ./...
 - [x] Expose `GET /health`
 - [x] Match routes and enforce allowed methods
 - [x] Proxy requests to single upstream routes
-- [ ] Support prefix stripping
-- [ ] Support global and route-level timeouts
+- [x] Support prefix stripping
+- [x] Support global and route-level timeouts
 - [ ] Support API key authentication
 - [ ] Support fixed-window rate limiting
 - [ ] Support retries for transient upstream failures
@@ -45,7 +45,9 @@ GatewayKit listening on :8080 with 5 routes
 
 Single `upstream.url` routes now proxy to their upstream service. Routes using
 `upstream.targets` still return `501 Not Implemented` until load balancing is added. If a
-configured upstream service is not running, the gateway returns `502 Bad Gateway`.
+configured upstream service is not running, the gateway returns `502 Bad Gateway`. Upstream
+requests honor route-level `timeout` first, then `global_timeout`, and return `504 Gateway
+Timeout` when exceeded.
 
 ## Project Layout
 

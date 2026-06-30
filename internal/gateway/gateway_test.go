@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"gatewaykit/internal/config"
 )
@@ -116,6 +117,65 @@ func TestMatchedAllowedRouteProxiesSingleUpstream(t *testing.T) {
 	}
 	if got := rec.Body.String(); got != `{"accepted":true}` {
 		t.Fatalf("body = %q, want upstream body", got)
+	}
+}
+
+func TestGlobalTimeoutReturnsGatewayTimeout(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(50 * time.Millisecond)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+
+	handler := NewHandler(config.Gateway{
+		GlobalTimeout: "10ms",
+		Routes: []config.Route{
+			{
+				Path:    "/api/users",
+				Methods: []string{http.MethodGet},
+				Upstream: config.Upstream{
+					URL: upstream.URL,
+				},
+			},
+		},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusGatewayTimeout {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusGatewayTimeout)
+	}
+}
+
+func TestRouteTimeoutOverridesGlobalTimeout(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(50 * time.Millisecond)
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+
+	handler := NewHandler(config.Gateway{
+		GlobalTimeout: "1s",
+		Routes: []config.Route{
+			{
+				Path:    "/api/users",
+				Methods: []string{http.MethodGet},
+				Timeout: "10ms",
+				Upstream: config.Upstream{
+					URL: upstream.URL,
+				},
+			},
+		},
+	})
+	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+	rec := httptest.NewRecorder()
+
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusGatewayTimeout {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusGatewayTimeout)
 	}
 }
 

@@ -13,16 +13,18 @@ import (
 )
 
 type Handler struct {
-	startedAt time.Time
-	routes    []config.Route
-	proxy     *proxy.Forwarder
+	startedAt     time.Time
+	routes        []config.Route
+	globalTimeout time.Duration
+	proxy         *proxy.Forwarder
 }
 
 func NewHandler(cfg config.Gateway) *Handler {
 	return &Handler{
-		startedAt: time.Now(),
-		routes:    cfg.Routes,
-		proxy:     proxy.NewForwarder(nil),
+		startedAt:     time.Now(),
+		routes:        cfg.Routes,
+		globalTimeout: parseDuration(cfg.GlobalTimeout),
+		proxy:         proxy.NewForwarder(nil),
 	}
 }
 
@@ -43,9 +45,13 @@ func (h *Handler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := h.proxy.ServeHTTP(w, r, route); err != nil {
+	if err := h.proxy.ServeHTTP(w, r, route, h.timeoutFor(route)); err != nil {
 		if errors.Is(err, proxy.ErrUnsupportedUpstream) {
 			writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "proxy_not_implemented"})
+			return
+		}
+		if errors.Is(err, proxy.ErrUpstreamTimeout) {
+			writeJSON(w, http.StatusGatewayTimeout, map[string]string{"error": "gateway_timeout"})
 			return
 		}
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": "bad_gateway"})
@@ -83,6 +89,24 @@ func methodAllowed(route config.Route, method string) bool {
 		}
 	}
 	return false
+}
+
+func (h *Handler) timeoutFor(route config.Route) time.Duration {
+	if route.Timeout != "" {
+		return parseDuration(route.Timeout)
+	}
+	return h.globalTimeout
+}
+
+func parseDuration(value string) time.Duration {
+	if value == "" {
+		return 0
+	}
+	duration, err := time.ParseDuration(value)
+	if err != nil {
+		return 0
+	}
+	return duration
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

@@ -42,7 +42,7 @@ func TestForwarderProxiesRequestAndResponse(t *testing.T) {
 	rec := httptest.NewRecorder()
 
 	route := config.Route{Upstream: config.Upstream{URL: upstream.URL}}
-	err := NewForwarder(upstream.Client()).ServeHTTP(rec, req, route)
+	err := NewForwarder(upstream.Client()).ServeHTTP(rec, req, route, 0)
 	if err != nil {
 		t.Fatalf("ServeHTTP() error = %v", err)
 	}
@@ -63,8 +63,60 @@ func TestForwarderRejectsUnsupportedUpstream(t *testing.T) {
 	rec := httptest.NewRecorder()
 	route := config.Route{Upstream: config.Upstream{Targets: []config.Target{{URL: "http://example.com", Weight: 1}}}}
 
-	err := NewForwarder(nil).ServeHTTP(rec, req, route)
+	err := NewForwarder(nil).ServeHTTP(rec, req, route, 0)
 	if !errors.Is(err, ErrUnsupportedUpstream) {
 		t.Fatalf("ServeHTTP() error = %v, want ErrUnsupportedUpstream", err)
+	}
+}
+
+func TestForwarderStripsRoutePrefix(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.RequestURI(); got != "/42?expand=true" {
+			t.Fatalf("request URI = %q, want /42?expand=true", got)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users/42?expand=true", nil)
+	rec := httptest.NewRecorder()
+	route := config.Route{
+		Path:        "/api/users",
+		StripPrefix: true,
+		Upstream:    config.Upstream{URL: upstream.URL},
+	}
+
+	err := NewForwarder(upstream.Client()).ServeHTTP(rec, req, route, 0)
+	if err != nil {
+		t.Fatalf("ServeHTTP() error = %v", err)
+	}
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
+	}
+}
+
+func TestForwarderStripsExactRoutePrefixToRoot(t *testing.T) {
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.RequestURI(); got != "/" {
+			t.Fatalf("request URI = %q, want /", got)
+		}
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer upstream.Close()
+
+	req := httptest.NewRequest(http.MethodGet, "/api/users", nil)
+	rec := httptest.NewRecorder()
+	route := config.Route{
+		Path:        "/api/users",
+		StripPrefix: true,
+		Upstream:    config.Upstream{URL: upstream.URL},
+	}
+
+	err := NewForwarder(upstream.Client()).ServeHTTP(rec, req, route, 0)
+	if err != nil {
+		t.Fatalf("ServeHTTP() error = %v", err)
+	}
+	if rec.Code != http.StatusNoContent {
+		t.Fatalf("status = %d, want %d", rec.Code, http.StatusNoContent)
 	}
 }
