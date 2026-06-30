@@ -49,12 +49,12 @@ without rewriting the core proxy path.
 - Single `upstream.url` routes proxy requests and return upstream responses.
 - Prefix stripping and upstream request timeouts implemented.
 - API key authentication implemented for routes with `auth.type: api_key`.
-- Fixed-window rate limiting implemented with in-memory per-route buckets.
+- Fixed-window and sliding-window rate limiting implemented with in-memory per-route buckets.
 - Retry support implemented for configured single-upstream response statuses.
 - Multi-target upstream routes support round-robin and weighted round-robin selection.
 
 ## Next Steps
 
-1. Circle back to sliding-window rate limiting if time allows.
-2. Add health checks for target upstreams.
+1. Add health checks for target upstreams.
+2. Add circuit breaker support.
 3. Add manual mock upstream instructions or a small mock upstream binary.

@@ -395,7 +395,7 @@ func TestPerIPFixedWindowRateLimitUsesSeparateBuckets(t *testing.T) {
 	}
 }
 
-func TestSlidingWindowRateLimitIsCurrentlyNotEnforced(t *testing.T) {
+func TestSlidingWindowRateLimitIsEnforced(t *testing.T) {
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNoContent)
 	}))
@@ -419,12 +419,16 @@ func TestSlidingWindowRateLimitIsCurrentlyNotEnforced(t *testing.T) {
 		},
 	})
 
-	for i := 0; i < 2; i++ {
-		rec := httptest.NewRecorder()
-		handler.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/users", nil))
-		if rec.Code != http.StatusNoContent {
-			t.Fatalf("request %d status = %d, want %d", i+1, rec.Code, http.StatusNoContent)
-		}
+	first := httptest.NewRecorder()
+	handler.ServeHTTP(first, httptest.NewRequest(http.MethodGet, "/api/users", nil))
+	if first.Code != http.StatusNoContent {
+		t.Fatalf("first status = %d, want %d", first.Code, http.StatusNoContent)
+	}
+
+	second := httptest.NewRecorder()
+	handler.ServeHTTP(second, httptest.NewRequest(http.MethodGet, "/api/users", nil))
+	if second.Code != http.StatusTooManyRequests {
+		t.Fatalf("second status = %d, want %d", second.Code, http.StatusTooManyRequests)
 	}
 }
 

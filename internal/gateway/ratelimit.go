@@ -19,6 +19,7 @@ type rateLimiter struct {
 type rateBucket struct {
 	windowStart time.Time
 	count       int
+	requests    []time.Time
 }
 
 func newRateLimiter() *rateLimiter {
@@ -29,10 +30,6 @@ func newRateLimiter() *rateLimiter {
 }
 
 func (l *rateLimiter) allow(route config.Route, r *http.Request, rule config.RateLimit) bool {
-	if rule.Strategy != "fixed_window" {
-		return true
-	}
-
 	window := parseDuration(rule.Window)
 	if rule.Requests <= 0 || window <= 0 {
 		return true
@@ -44,6 +41,17 @@ func (l *rateLimiter) allow(route config.Route, r *http.Request, rule config.Rat
 	l.mu.Lock()
 	defer l.mu.Unlock()
 
+	if rule.Strategy == "sliding_window" {
+		return l.allowSlidingWindow(key, now, window, rule.Requests)
+	}
+	if rule.Strategy != "fixed_window" {
+		return true
+	}
+
+	return l.allowFixedWindow(key, now, window, rule.Requests)
+}
+
+func (l *rateLimiter) allowFixedWindow(key string, now time.Time, window time.Duration, limit int) bool {
 	bucket := l.buckets[key]
 	if bucket.windowStart.IsZero() || now.Sub(bucket.windowStart) >= window {
 		l.buckets[key] = rateBucket{
@@ -53,11 +61,32 @@ func (l *rateLimiter) allow(route config.Route, r *http.Request, rule config.Rat
 		return true
 	}
 
-	if bucket.count >= rule.Requests {
+	if bucket.count >= limit {
 		return false
 	}
 
 	bucket.count++
+	l.buckets[key] = bucket
+	return true
+}
+
+func (l *rateLimiter) allowSlidingWindow(key string, now time.Time, window time.Duration, limit int) bool {
+	bucket := l.buckets[key]
+	cutoff := now.Add(-window)
+	requests := bucket.requests[:0]
+	for _, requestTime := range bucket.requests {
+		if requestTime.After(cutoff) {
+			requests = append(requests, requestTime)
+		}
+	}
+
+	if len(requests) >= limit {
+		bucket.requests = requests
+		l.buckets[key] = bucket
+		return false
+	}
+
+	bucket.requests = append(requests, now)
 	l.buckets[key] = bucket
 	return true
 }
